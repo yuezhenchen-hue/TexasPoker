@@ -1,24 +1,21 @@
-# 🃏 德州扑克 (Texas Hold'em Poker)
+# 🃏 德扑策略师 (Poker Strategy Master)
 
-一款使用 Python + Pygame 构建的桌面版德州扑克游戏。
+一款使用 **Swift + SwiftUI** 构建的 iOS 德州扑克游戏 App。
 
 ## 功能特性
 
-- **完整的德州扑克规则**: 翻牌前、翻牌、转牌、河牌、摊牌全流程
-- **AI 对手**: 4 个不同风格的 AI 玩家（保守型、激进型、松散型）
-- **精美界面**: Pygame 绘制的仿真牌桌，带有动态效果
-- **手牌评估**: 支持所有牌型判定（皇家同花顺、同花顺、四条、葫芦、同花、顺子、三条、两对、一对、高牌）
-- **筹码系统**: 下注、加注、全下、跟注、过牌、弃牌
-- **中文界面**: 完全中文化的游戏界面
-
-## 游戏截图
-
-启动游戏后，你将看到一张绿色的椭圆形牌桌，玩家分布在牌桌四周。
+- **完整德州扑克规则**: 翻牌前 → 翻牌 → 转牌 → 河牌 → 摊牌
+- **4 个 AI 对手**: 保守型 (Tight)、激进型 (Aggressive)、松散型 (Loose) 三种策略风格
+- **精美 SwiftUI 界面**: 仿真牌桌、程序化绘制扑克牌、玩家面板
+- **手牌评估**: 支持全部 10 种牌型（皇家同花顺 → 高牌）
+- **完整操作**: 弃牌、过牌、跟注、加注（滑块选择）、全下
+- **中文界面**: 完全中文本地化
 
 ## 环境要求
 
-- Python 3.10+
-- Pygame 2.5+
+- macOS + Xcode 15+
+- iOS 16.0+
+- [XcodeGen](https://github.com/yonaskolb/XcodeGen) (用于生成 .xcodeproj)
 
 ## 安装与运行
 
@@ -27,51 +24,54 @@
 git clone https://github.com/yuezhenchen-hue/TexasPoker.git
 cd TexasPoker
 
-# 安装依赖
-pip install -r requirements.txt
+# 生成 Xcode 项目
+xcodegen generate
 
-# 运行游戏
-python main.py
+# 用 Xcode 打开
+open TexasPoker.xcodeproj
 ```
 
-## 操作说明
-
-| 操作 | 说明 |
-|------|------|
-| 开始游戏 | 点击 "开始游戏" 按钮 |
-| 弃牌 | 点击 "弃牌" 按钮 |
-| 过牌 | 点击 "过牌" 按钮（无需跟注时可用） |
-| 跟注 | 点击 "跟注" 按钮 |
-| 加注 | 拖动滑块选择金额，点击 "加注" 按钮 |
-| 全下 | 点击 "全下" 按钮 |
-| 下一局 | 本局结束后点击 "下一局" |
-| 退出 | 按 `ESC` 键或关闭窗口 |
+在 Xcode 中选择模拟器，点击 Run (⌘R) 即可运行。
 
 ## 项目结构
 
 ```
 TexasPoker/
-├── main.py              # 主程序入口，游戏循环
-├── requirements.txt     # 依赖列表
-├── README.md
-├── poker/               # 扑克核心逻辑
-│   ├── __init__.py
-│   ├── card.py          # 扑克牌 & 牌组
-│   ├── hand_evaluator.py # 手牌评估器
-│   ├── player.py        # 玩家 & AI 策略
-│   └── game.py          # 游戏引擎
-└── ui/                  # UI 渲染
-    ├── __init__.py
-    ├── renderer.py      # Pygame 渲染器
-    └── button.py        # UI 组件（按钮、滑块）
+├── project.yml                      # XcodeGen 配置
+├── TexasPoker/
+│   ├── TexasPokerApp.swift          # App 入口
+│   ├── Models/
+│   │   ├── Card.swift               # 扑克牌 & 牌组
+│   │   ├── HandEvaluator.swift      # 手牌评估器
+│   │   ├── Player.swift             # 玩家 & AI 策略
+│   │   └── GameEngine.swift         # 游戏引擎
+│   ├── ViewModels/
+│   │   └── GameViewModel.swift      # 游戏状态管理
+│   ├── Views/
+│   │   ├── ContentView.swift        # 欢迎页
+│   │   ├── GameView.swift           # 游戏主界面
+│   │   ├── CardView.swift           # 扑克牌组件
+│   │   ├── PlayerView.swift         # 玩家面板组件
+│   │   └── ActionBar.swift          # 操作按钮栏
+│   └── Assets.xcassets/             # 图片资源 & App 图标
+└── README.md
 ```
 
-## 德州扑克规则简介
+## 德州扑克规则
 
 1. 每位玩家发 2 张底牌（仅自己可见）
-2. 共 4 轮下注：翻牌前 → 翻牌（3张公共牌）→ 转牌（第4张）→ 河牌（第5张）
-3. 用 5 张最优牌组合（2 底牌 + 5 公共牌中选 5 张）比大小
-4. 牌型从大到小：皇家同花顺 > 同花顺 > 四条 > 葫芦 > 同花 > 顺子 > 三条 > 两对 > 一对 > 高牌
+2. 共 4 轮下注：翻牌前 → 翻牌（3 张公共牌）→ 转牌（第 4 张）→ 河牌（第 5 张）
+3. 从 7 张牌中选出最优 5 张组合比大小
+4. **牌型大小**: 皇家同花顺 > 同花顺 > 四条 > 葫芦 > 同花 > 顺子 > 三条 > 两对 > 一对 > 高牌
+
+## 技术栈
+
+| 技术 | 用途 |
+|------|------|
+| Swift 5.9 | 编程语言 |
+| SwiftUI | UI 框架 |
+| Combine | 响应式状态管理 |
+| XcodeGen | 项目文件生成 |
 
 ## License
 

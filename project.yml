@@ -1,0 +1,30 @@
+name: TexasPoker
+options:
+  bundleIdPrefix: com.pokerstrategymaster
+  deploymentTarget:
+    iOS: "16.0"
+  generateEmptyDirectories: true
+
+targets:
+  TexasPoker:
+    type: application
+    platform: iOS
+    sources:
+      - path: TexasPoker
+    settings:
+      base:
+        SWIFT_VERSION: "5.9"
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: true
+        PRODUCT_NAME: "德扑策略师"
+        PRODUCT_BUNDLE_IDENTIFIER: com.pokerstrategymaster.texaspoker
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: true
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: true
+        INFOPLIST_KEY_UILaunchScreen_Generation: true
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_CFBundleDisplayName: "德扑策略师"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ALWAYS_SEARCH_USER_PATHS: false
