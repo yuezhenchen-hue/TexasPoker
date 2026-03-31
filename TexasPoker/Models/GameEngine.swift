@@ -2,6 +2,7 @@ import Foundation
 
 enum GamePhase: String {
     case waiting = "等待开始"
+    case dealing = "发牌中"
     case preFlop = "翻牌前"
     case flop = "翻牌"
     case turn = "转牌"
@@ -39,16 +40,42 @@ class GameEngine: ObservableObject {
     private var dealerIndex: Int = 0
     private var lastRaiserIndex: Int = -1
 
-    init() {
-        human = Player(name: "你", chips: 1000, isHuman: true)
-        let names = [
-            ("Alice", AIStyle.tight),
-            ("Bob", AIStyle.aggressive),
-            ("Charlie", AIStyle.loose),
-            ("Diana", AIStyle.tight),
-        ]
-        aiPlayers = names.map { Player(name: $0.0, chips: 1000, aiStyle: $0.1) }
+    // Cards dealt but not yet revealed (for animation)
+    @Published var pendingHoleCards: [[Card]] = []
+
+    private let allAITemplates: [(String, AIStyle)] = [
+        ("Alice", .tight),
+        ("Bob", .aggressive),
+        ("Charlie", .loose),
+        ("Diana", .tight),
+        ("Eve", .aggressive),
+        ("Frank", .loose),
+        ("Grace", .tight),
+    ]
+
+    init(aiCount: Int = 4, startingChips: Int = 1000) {
+        human = Player(name: "你", chips: startingChips, isHuman: true)
+        let count = min(aiCount, allAITemplates.count)
+        aiPlayers = allAITemplates.prefix(count).map {
+            Player(name: $0.0, chips: startingChips, aiStyle: $0.1)
+        }
         players = [human] + aiPlayers
+    }
+
+    func reconfigure(aiCount: Int, startingChips: Int) {
+        let count = min(aiCount, allAITemplates.count)
+        human.chips = startingChips
+        aiPlayers = allAITemplates.prefix(count).map {
+            Player(name: $0.0, chips: startingChips, aiStyle: $0.1)
+        }
+        players = [human] + aiPlayers
+        phase = .waiting
+        handNumber = 0
+        communityCards = []
+        pot = 0
+        handResults = []
+        message = "点击「开始游戏」"
+        dealerIndex = 0
     }
 
     var activePlayers: [Player] { players.filter { !$0.isFolded } }
@@ -76,17 +103,34 @@ class GameEngine: ObservableObject {
         currentBet = 0
         minRaise = Self.bigBlind
         handResults = []
+        pendingHoleCards = []
 
         for p in players { p.resetForNewHand() }
         dealerIndex = dealerIndex % players.count
         assignPositions()
         postBlinds()
-        dealHoleCards()
 
+        // Prepare cards for dealing animation
+        phase = .dealing
+        prepareDealingCards()
+        message = "荷官发牌中..."
+    }
+
+    func finishDealing() {
+        for (i, p) in players.enumerated() {
+            if i < pendingHoleCards.count {
+                p.holeCards = pendingHoleCards[i]
+            }
+        }
+        pendingHoleCards = []
         phase = .preFlop
         setFirstPlayerPreflop()
         message = "第 \(handNumber) 局 — 翻牌前"
         checkHumanTurn()
+    }
+
+    private func prepareDealingCards() {
+        pendingHoleCards = players.map { _ in deck.deal(2) }
     }
 
     private func removeBrokePlayers() {
@@ -113,12 +157,6 @@ class GameEngine: ObservableObject {
         let bbActual = bb.bet(Self.bigBlind)
         pot += sbActual + bbActual
         currentBet = Self.bigBlind
-    }
-
-    private func dealHoleCards() {
-        for p in players {
-            p.holeCards = deck.deal(2)
-        }
     }
 
     // MARK: - Turn Management

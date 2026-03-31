@@ -1,13 +1,37 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var showGame = false
+    @State private var screen: AppScreen = .welcome
+    @State private var settings = GameSettings()
+    @StateObject private var soundManager = SoundManager.shared
+
+    enum AppScreen {
+        case welcome, settings, game
+    }
 
     var body: some View {
-        if showGame {
-            GameView()
-        } else {
+        switch screen {
+        case .welcome:
             welcomeScreen
+                .transition(.opacity)
+        case .settings:
+            SettingsView(settings: $settings, soundManager: soundManager) {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    screen = .game
+                }
+            }
+            .transition(.move(edge: .trailing))
+        case .game:
+            GameView(
+                aiCount: settings.aiCount,
+                startingChips: settings.startingChips,
+                onBack: {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        screen = .settings
+                    }
+                }
+            )
+            .transition(.move(edge: .trailing))
         }
     }
 
@@ -26,7 +50,6 @@ struct ContentView: View {
             VStack(spacing: 24) {
                 Spacer()
 
-                // Logo area
                 ZStack {
                     Circle()
                         .fill(
@@ -56,15 +79,18 @@ struct ContentView: View {
                 Spacer()
 
                 VStack(spacing: 14) {
-                    featureRow(icon: "person.3.fill", text: "4 个 AI 对手，不同风格策略")
-                    featureRow(icon: "suit.club.fill", text: "完整德州扑克规则")
-                    featureRow(icon: "dollarsign.circle.fill", text: "起始 1000 筹码")
+                    featureRow(icon: "person.3.fill", text: "自定义 1-7 个 AI 对手")
+                    featureRow(icon: "suit.club.fill", text: "完整德州扑克规则 & 荷官发牌")
+                    featureRow(icon: "music.note", text: "沉浸式背景音乐 & 音效")
                 }
                 .padding(.horizontal, 40)
 
                 Spacer()
 
-                Button(action: { withAnimation(.spring()) { showGame = true } }) {
+                Button(action: {
+                    soundManager.playButtonTap()
+                    withAnimation(.spring()) { screen = .settings }
+                }) {
                     HStack {
                         Image(systemName: "play.fill")
                         Text("开始游戏")

@@ -1,7 +1,14 @@
 import SwiftUI
 
 struct GameView: View {
-    @StateObject private var viewModel = GameViewModel()
+    @StateObject private var viewModel: GameViewModel
+    @ObservedObject private var soundManager = SoundManager.shared
+    var onBack: () -> Void
+
+    init(aiCount: Int, startingChips: Int, onBack: @escaping () -> Void) {
+        _viewModel = StateObject(wrappedValue: GameViewModel(aiCount: aiCount, startingChips: startingChips))
+        self.onBack = onBack
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -28,6 +35,11 @@ struct GameView: View {
                     bottomArea(geo: geo)
                 }
                 .padding(.horizontal, 8)
+
+                // Dealing animation overlay
+                if viewModel.isDealing {
+                    dealingOverlay(geo: geo)
+                }
 
                 if viewModel.showResults && !viewModel.engine.handResults.isEmpty {
                     resultsOverlay
@@ -57,18 +69,74 @@ struct GameView: View {
 
     private func topBar(geo: GeometryProxy) -> some View {
         HStack {
+            Button(action: {
+                soundManager.playButtonTap()
+                soundManager.stopMusic()
+                onBack()
+            }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.left")
+                    Text("设置")
+                }
+                .font(.system(size: 13))
+                .foregroundColor(.gray)
+            }
+
+            Spacer()
+
             Text("阶段: \(viewModel.engine.phase.rawValue)")
                 .font(.system(size: 12))
                 .foregroundColor(.gray)
 
             Spacer()
 
-            Text("第 \(viewModel.engine.handNumber) 局")
-                .font(.system(size: 12))
-                .foregroundColor(.gray)
+            HStack(spacing: 12) {
+                // Music toggle
+                Button(action: {
+                    soundManager.isMusicEnabled.toggle()
+                    soundManager.playButtonTap()
+                }) {
+                    Image(systemName: soundManager.isMusicEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(soundManager.isMusicEnabled ? .green : .gray)
+                }
+
+                Text("第 \(viewModel.engine.handNumber) 局")
+                    .font(.system(size: 12))
+                    .foregroundColor(.gray)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.top, geo.safeAreaInsets.top + 4)
+    }
+
+    // MARK: - Dealing Overlay
+
+    private func dealingOverlay(geo: GeometryProxy) -> some View {
+        let deckPos = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2 - 60)
+
+        return ZStack {
+            // Deck position indicator
+            VStack(spacing: 4) {
+                Image(systemName: "rectangle.stack.fill")
+                    .font(.system(size: 28))
+                    .foregroundColor(.yellow.opacity(0.8))
+                Text("荷官发牌中...")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+            .position(deckPos)
+
+            // Flying cards animation
+            ForEach(Array(viewModel.dealtPlayerIndices), id: \.self) { idx in
+                CardView(card: nil, faceUp: false, width: 36, height: 51)
+                    .transition(.asymmetric(
+                        insertion: .scale.combined(with: .opacity),
+                        removal: .opacity
+                    ))
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: viewModel.dealtPlayerIndices)
     }
 
     // MARK: - Poker Table
@@ -78,7 +146,6 @@ struct GameView: View {
         let tableH = min(geo.size.height * 0.32, 200.0)
 
         return ZStack {
-            // Table
             Ellipse()
                 .fill(
                     RadialGradient(
@@ -107,7 +174,6 @@ struct GameView: View {
                 )
                 .frame(width: tableW, height: tableH)
 
-            // Pot
             if viewModel.engine.pot > 0 {
                 VStack(spacing: 2) {
                     Text("底池")
@@ -123,7 +189,6 @@ struct GameView: View {
                 .offset(y: -tableH * 0.28)
             }
 
-            // Community cards
             if !viewModel.engine.communityCards.isEmpty {
                 CardRow(
                     cards: viewModel.engine.communityCards,
@@ -131,12 +196,12 @@ struct GameView: View {
                     spacing: 5,
                     cardWidth: min(48, (tableW - 80) / 6)
                 )
+                .transition(.scale.combined(with: .opacity))
+                .animation(.easeOut(duration: 0.3), value: viewModel.engine.communityCards.count)
             }
 
-            // Side players
             sidePlayers(tableW: tableW, tableH: tableH)
 
-            // Message
             messageView
                 .offset(y: tableH * 0.38)
         }
@@ -146,14 +211,9 @@ struct GameView: View {
 
     private func topPlayers(geo: GeometryProxy) -> some View {
         let topAI = topPositionPlayers
-        return HStack(spacing: 20) {
+        return HStack(spacing: 16) {
             ForEach(topAI, id: \.id) { player in
-                PlayerView(
-                    player: player,
-                    isCurrent: isCurrentPlayer(player),
-                    showCards: showAllCards,
-                    isBottom: false
-                )
+                playerViewAnimated(player: player, isBottom: false)
             }
         }
     }
@@ -162,47 +222,49 @@ struct GameView: View {
         let sides = sidePositionPlayers
         return ZStack {
             if sides.count > 0 {
-                PlayerView(
-                    player: sides[0],
-                    isCurrent: isCurrentPlayer(sides[0]),
-                    showCards: showAllCards,
-                    isBottom: false
-                )
-                .offset(x: -tableW * 0.42, y: 0)
+                playerViewAnimated(player: sides[0], isBottom: false)
+                    .offset(x: -tableW * 0.42, y: 0)
             }
             if sides.count > 1 {
-                PlayerView(
-                    player: sides[1],
-                    isCurrent: isCurrentPlayer(sides[1]),
-                    showCards: showAllCards,
-                    isBottom: false
-                )
-                .offset(x: tableW * 0.42, y: 0)
+                playerViewAnimated(player: sides[1], isBottom: false)
+                    .offset(x: tableW * 0.42, y: 0)
             }
         }
     }
 
     private func bottomPlayer(geo: GeometryProxy) -> some View {
-        PlayerView(
-            player: viewModel.engine.human,
-            isCurrent: isCurrentPlayer(viewModel.engine.human),
-            showCards: true,
-            isBottom: true
-        )
+        playerViewAnimated(player: viewModel.engine.human, isBottom: true)
     }
 
-    /// AI at top center area
+    private func playerViewAnimated(player: Player, isBottom: Bool) -> some View {
+        let showCards: Bool
+        if viewModel.isDealing {
+            let idx = viewModel.engine.players.firstIndex(where: { $0.id == player.id }) ?? -1
+            showCards = player.isHuman && viewModel.dealtPlayerIndices.contains(idx)
+        } else {
+            showCards = showAllCards || player.isHuman
+        }
+
+        return PlayerView(
+            player: player,
+            isCurrent: isCurrentPlayer(player),
+            showCards: showCards,
+            isBottom: isBottom
+        )
+        .animation(.easeInOut(duration: 0.3), value: player.isFolded)
+    }
+
     private var topPositionPlayers: [Player] {
         let ai = viewModel.engine.aiPlayers
-        guard ai.count >= 2 else { return ai }
+        if ai.count <= 2 { return ai }
         let mid = ai.count / 2
-        return Array(ai[mid...].prefix(2))
+        return Array(ai[mid...])
     }
 
-    /// AI on left/right sides
     private var sidePositionPlayers: [Player] {
         let ai = viewModel.engine.aiPlayers
         guard ai.count >= 1 else { return [] }
+        if ai.count <= 2 { return [] }
         let mid = ai.count / 2
         return Array(ai.prefix(mid))
     }
@@ -213,6 +275,10 @@ struct GameView: View {
         Group {
             if viewModel.engine.phase == .waiting {
                 startButton
+            } else if viewModel.isDealing {
+                Text("荷官发牌中...")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.yellow)
             } else if viewModel.engine.phase == .handOver {
                 nextHandButton
             } else if viewModel.engine.waitingForHuman {
@@ -227,7 +293,10 @@ struct GameView: View {
     }
 
     private var startButton: some View {
-        Button(action: { viewModel.startGame() }) {
+        Button(action: {
+            soundManager.playButtonTap()
+            viewModel.startGame()
+        }) {
             Text("开始游戏")
                 .font(.system(size: 20, weight: .bold))
                 .foregroundColor(.white)
@@ -247,7 +316,10 @@ struct GameView: View {
     }
 
     private var nextHandButton: some View {
-        Button(action: { viewModel.nextHand() }) {
+        Button(action: {
+            soundManager.playButtonTap()
+            viewModel.nextHand()
+        }) {
             Text("下一局")
                 .font(.system(size: 18, weight: .bold))
                 .foregroundColor(.white)
@@ -269,6 +341,7 @@ struct GameView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 5)
             .background(Capsule().fill(Color.black.opacity(0.6)))
+            .animation(.easeInOut(duration: 0.2), value: viewModel.engine.message)
     }
 
     // MARK: - Results Overlay
@@ -303,7 +376,6 @@ struct GameView: View {
                     .padding(.horizontal, 20)
                 }
 
-                // Show all non-folded players' cards
                 if viewModel.engine.activePlayers.count > 1 {
                     Divider().background(Color.white.opacity(0.3))
 
@@ -319,7 +391,10 @@ struct GameView: View {
                     }
                 }
 
-                Button(action: { viewModel.nextHand() }) {
+                Button(action: {
+                    soundManager.playButtonTap()
+                    viewModel.nextHand()
+                }) {
                     Text("下一局")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
@@ -339,6 +414,7 @@ struct GameView: View {
                     )
             )
             .padding(.horizontal, 40)
+            .transition(.scale.combined(with: .opacity))
         }
     }
 
@@ -347,7 +423,8 @@ struct GameView: View {
     private func isCurrentPlayer(_ player: Player) -> Bool {
         guard viewModel.engine.phase != .waiting,
               viewModel.engine.phase != .handOver,
-              viewModel.engine.phase != .showdown else { return false }
+              viewModel.engine.phase != .showdown,
+              viewModel.engine.phase != .dealing else { return false }
         return viewModel.engine.currentPlayerIndex < viewModel.engine.players.count &&
                viewModel.engine.players[viewModel.engine.currentPlayerIndex].id == player.id
     }
