@@ -12,9 +12,20 @@ class GameViewModel: ObservableObject {
     @Published var isDealing: Bool = false
     @Published var dealtPlayerIndices: Set<Int> = []
 
+    // Phase pause state — when a new community phase arrives, we pause briefly
+    @Published var isPhasePaused: Bool = false
+
     let soundManager = SoundManager.shared
     private var aiTimer: Timer?
     private var dealTimer: Timer?
+    private var showdownTimer: Timer?
+
+    /// Time AI takes to act (seconds)
+    private let aiDelay: TimeInterval = 0.9
+    /// Pause when new community cards appear (seconds)
+    private let phasePauseDelay: TimeInterval = 1.5
+    /// How long to show all cards at showdown before results overlay (seconds)
+    private let showdownDisplayTime: TimeInterval = 3.5
 
     init(aiCount: Int = 4, startingChips: Int = 1000) {
         engine = GameEngine(aiCount: aiCount, startingChips: startingChips)
@@ -53,14 +64,14 @@ class GameViewModel: ObservableObject {
         case .allIn: soundManager.playAllIn()
         }
         engine.processHumanAction(action)
-        startAILoop()
+        scheduleNextStep()
     }
 
     func performRaise() {
         soundManager.playChipBet()
         let amount = Int(raiseAmount)
         engine.processHumanAction(.raise(amount))
-        startAILoop()
+        scheduleNextStep()
     }
 
     var humanOptions: [PlayerAction] {
@@ -93,7 +104,7 @@ class GameViewModel: ObservableObject {
         var cardStep = 0
 
         dealTimer?.invalidate()
-        dealTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] timer in
+        dealTimer = Timer.scheduledTimer(withTimeInterval: 0.18, repeats: true) { [weak self] timer in
             Task { @MainActor in
                 guard let self = self else { timer.invalidate(); return }
 
@@ -105,44 +116,76 @@ class GameViewModel: ObservableObject {
 
                 cardStep += 1
 
-                // Each player gets 2 cards
                 if cardStep >= playerCount * 2 {
                     timer.invalidate()
-                    // Short pause then finish
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                         self.isDealing = false
                         self.engine.finishDealing()
                         self.objectWillChange.send()
-                        self.startAILoop()
+                        self.scheduleNextStep()
                     }
                 }
             }
         }
     }
 
-    // MARK: - AI Loop
+    // MARK: - Main game loop dispatcher
 
-    private func startAILoop() {
+    private func scheduleNextStep() {
         aiTimer?.invalidate()
-        guard !engine.waitingForHuman,
-              engine.phase != .handOver,
-              engine.phase != .showdown,
-              engine.phase != .waiting,
-              engine.phase != .dealing else {
-            if engine.phase == .handOver {
-                showResults = true
-                soundManager.playWin()
+
+        // If a new community phase just started, pause so the player can see the cards
+        if engine.phaseJustChanged {
+            engine.phaseJustChanged = false
+            isPhasePaused = true
+            soundManager.playDealCard()
+            aiTimer = Timer.scheduledTimer(withTimeInterval: phasePauseDelay, repeats: false) { [weak self] _ in
+                Task { @MainActor in
+                    self?.isPhasePaused = false
+                    self?.scheduleNextStep()
+                }
             }
             return
         }
 
-        aiTimer = Timer.scheduledTimer(withTimeInterval: 0.7, repeats: false) { [weak self] _ in
+        // Showdown: all cards are visible, wait then show results
+        if engine.phase == .showdown {
+            soundManager.playWin()
+            showdownTimer?.invalidate()
+            showdownTimer = Timer.scheduledTimer(withTimeInterval: showdownDisplayTime, repeats: false) { [weak self] _ in
+                Task { @MainActor in
+                    guard let self = self else { return }
+                    self.engine.finishShowdown()
+                    self.showResults = true
+                    self.objectWillChange.send()
+                }
+            }
+            return
+        }
+
+        // Hand over
+        if engine.phase == .handOver {
+            showResults = true
+            soundManager.playWin()
+            return
+        }
+
+        // Waiting for human
+        if engine.waitingForHuman {
+            return
+        }
+
+        // Not actionable phases
+        guard engine.phase != .waiting, engine.phase != .dealing else { return }
+
+        // AI turn
+        aiTimer = Timer.scheduledTimer(withTimeInterval: aiDelay, repeats: false) { [weak self] _ in
             Task { @MainActor in
                 guard let self = self else { return }
+                let prev = self.engine.currentPlayer
                 if self.engine.processAITurn() {
-                    // Play sound for AI action
-                    if let player = self.engine.currentPlayer ?? self.engine.players.last {
-                        switch player.lastAction {
+                    if let p = prev {
+                        switch p.lastAction {
                         case .fold: self.soundManager.playFold()
                         case .check: self.soundManager.playCheck()
                         case .call, .raise: self.soundManager.playChipBet()
@@ -151,10 +194,7 @@ class GameViewModel: ObservableObject {
                         }
                     }
                     self.objectWillChange.send()
-                    self.startAILoop()
-                } else if self.engine.phase == .handOver || self.engine.phase == .showdown {
-                    self.showResults = true
-                    self.soundManager.playWin()
+                    self.scheduleNextStep()
                 }
             }
         }
@@ -170,5 +210,6 @@ class GameViewModel: ObservableObject {
     deinit {
         aiTimer?.invalidate()
         dealTimer?.invalidate()
+        showdownTimer?.invalidate()
     }
 }

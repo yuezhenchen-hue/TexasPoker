@@ -70,9 +70,14 @@ struct GameView: View {
 
             Spacer()
 
-            Text(viewModel.engine.phase.rawValue)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.white.opacity(0.5))
+            VStack(spacing: 1) {
+                Text(viewModel.engine.phase.rawValue)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.6))
+                Text("盲注 \(GameEngine.smallBlind)/\(GameEngine.bigBlind)")
+                    .font(.system(size: 10))
+                    .foregroundColor(.orange.opacity(0.7))
+            }
 
             Spacer()
 
@@ -270,14 +275,18 @@ struct GameView: View {
             let idx = viewModel.engine.players.firstIndex(where: { $0.id == player.id }) ?? -1
             showCards = player.isHuman && viewModel.dealtPlayerIndices.contains(idx)
         } else {
+            // During showdown, show ALL non-folded players' cards
             showCards = showAllCards || player.isHuman
         }
+
+        let posName = viewModel.engine.positionName(for: player)
 
         return PlayerView(
             player: player,
             isCurrent: isCurrentPlayer(player),
             showCards: showCards,
-            isBottom: isBottom
+            isBottom: isBottom,
+            positionName: posName
         )
         .animation(.easeInOut(duration: 0.3), value: player.isFolded)
     }
@@ -309,8 +318,23 @@ struct GameView: View {
                 startButton
             } else if viewModel.isDealing {
                 EmptyView()
+            } else if viewModel.engine.phase == .showdown {
+                // Showdown: cards are showing, wait
+                VStack(spacing: 4) {
+                    Text("摊牌 — 查看所有玩家手牌")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.yellow)
+                    ProgressView()
+                        .tint(.yellow.opacity(0.6))
+                        .scaleEffect(0.8)
+                }
             } else if viewModel.engine.phase == .handOver {
                 nextHandButton
+            } else if viewModel.isPhasePaused {
+                // New community cards just appeared
+                Text(viewModel.engine.message)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.yellow)
             } else if viewModel.engine.waitingForHuman {
                 ActionBar(viewModel: viewModel)
             } else {
@@ -482,7 +506,8 @@ struct GameView: View {
                viewModel.engine.players[viewModel.engine.currentPlayerIndex].id == player.id
     }
 
+    /// During showdown AND handOver, all non-folded players' cards should be visible
     private var showAllCards: Bool {
-        viewModel.engine.phase == .showdown || viewModel.engine.phase == .handOver
+        viewModel.engine.phase == .showdown || viewModel.engine.phase == .handOver || viewModel.showResults
     }
 }

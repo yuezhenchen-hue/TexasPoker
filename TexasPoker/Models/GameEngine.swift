@@ -36,12 +36,15 @@ class GameEngine: ObservableObject {
     @Published var waitingForHuman: Bool = false
     @Published var handNumber: Int = 0
 
+    // Set when a new community phase starts, ViewModel reads and resets
+    @Published var phaseJustChanged: Bool = false
+
     private var deck = Deck()
     private var dealerIndex: Int = 0
     private var lastRaiserIndex: Int = -1
 
-    // Cards dealt but not yet revealed (for animation)
     @Published var pendingHoleCards: [[Card]] = []
+    private var showdownPot: Int = 0
 
     private let allAITemplates: [(String, AIStyle)] = [
         ("Alice", .tight),
@@ -88,6 +91,28 @@ class GameEngine: ObservableObject {
         return players[currentPlayerIndex]
     }
 
+    /// Position name for a player relative to dealer
+    func positionName(for player: Player) -> String? {
+        guard let idx = players.firstIndex(where: { $0.id == player.id }) else { return nil }
+        let n = players.count
+
+        if player.isDealer { return "BTN" }
+        if player.isSmallBlind { return "SB" }
+        if player.isBigBlind { return "BB" }
+
+        if n <= 3 { return nil }
+
+        // Standard position names
+        let bbIdx = (dealerIndex + 2) % n
+        let posFromBB = (idx - bbIdx + n) % n
+        if posFromBB == 1 { return "UTG" }
+
+        let btnDist = (dealerIndex - idx + n) % n
+        if btnDist == 1 { return "CO" }
+        if n >= 6 && btnDist == 2 { return "HJ" }
+        return "MP"
+    }
+
     // MARK: - New Hand
 
     func startNewHand() {
@@ -106,13 +131,13 @@ class GameEngine: ObservableObject {
         minRaise = Self.bigBlind
         handResults = []
         pendingHoleCards = []
+        phaseJustChanged = false
 
         for p in players { p.resetForNewHand() }
         dealerIndex = dealerIndex % players.count
         assignPositions()
         postBlinds()
 
-        // Prepare cards for dealing animation
         phase = .dealing
         prepareDealingCards()
         message = "荷官发牌中..."
@@ -129,6 +154,12 @@ class GameEngine: ObservableObject {
         setFirstPlayerPreflop()
         message = "第 \(handNumber) 局 — 翻牌前"
         checkHumanTurn()
+    }
+
+    /// Called by ViewModel after showdown display time
+    func finishShowdown() {
+        phase = .handOver
+        dealerIndex = (dealerIndex + 1) % players.count
     }
 
     private func prepareDealingCards() {
@@ -301,19 +332,22 @@ class GameEngine: ObservableObject {
         switch phase {
         case .preFlop:
             phase = .flop
-            _ = deck.dealOne() // burn
+            _ = deck.dealOne()
             communityCards.append(contentsOf: deck.deal(3))
-            message = "翻牌"
+            message = "— 翻牌 —"
+            phaseJustChanged = true
         case .flop:
             phase = .turn
             _ = deck.dealOne()
             communityCards.append(contentsOf: deck.deal(1))
-            message = "转牌"
+            message = "— 转牌 —"
+            phaseJustChanged = true
         case .turn:
             phase = .river
             _ = deck.dealOne()
             communityCards.append(contentsOf: deck.deal(1))
-            message = "河牌"
+            message = "— 河牌 —"
+            phaseJustChanged = true
         case .river:
             showdown()
             return
@@ -372,6 +406,7 @@ class GameEngine: ObservableObject {
     }
 
     private func showdown() {
+        showdownPot = pot
         phase = .showdown
         let contenders = activePlayers
 
@@ -393,16 +428,15 @@ class GameEngine: ObservableObject {
         }
 
         if winners.count == 1 {
-            message = "\(best.0.name) 赢得 \(pot) — \(best.1.description)"
+            message = "🏆 \(best.0.name) 赢得 \(pot) — \(best.1.description)"
         } else {
             let names = winners.map(\.0.name).joined(separator: "、")
-            message = "\(names) 平分 \(pot)"
+            message = "🏆 \(names) 平分 \(pot)"
         }
 
         pot = 0
-        phase = .handOver
-        dealerIndex = (dealerIndex + 1) % players.count
         waitingForHuman = false
+        // STAY in .showdown — ViewModel will call finishShowdown() after display time
     }
 
     // MARK: - Human Options

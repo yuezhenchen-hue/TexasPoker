@@ -8,7 +8,6 @@ struct AvatarView: View {
 
     var body: some View {
         ZStack {
-            // Glow ring for current player
             if isCurrent {
                 Circle()
                     .stroke(Color.green, lineWidth: 3)
@@ -37,11 +36,31 @@ struct AvatarView: View {
     }
 }
 
+/// D / SB / BB position chip badges
+struct PositionBadge: View {
+    let text: String
+    let color: Color
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 10, weight: .black, design: .rounded))
+            .foregroundColor(color == .yellow ? .black : .white)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                Capsule()
+                    .fill(color)
+                    .shadow(color: color.opacity(0.5), radius: 3, y: 1)
+            )
+    }
+}
+
 struct PlayerView: View {
     @ObservedObject var player: Player
     let isCurrent: Bool
     let showCards: Bool
     let isBottom: Bool
+    var positionName: String?
 
     var body: some View {
         VStack(spacing: 3) {
@@ -49,10 +68,32 @@ struct PlayerView: View {
                 cardRow
             }
 
+            // Position badges row
+            positionBadges
+
             playerPanel
 
             if !isBottom && !player.holeCards.isEmpty {
                 cardRow
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var positionBadges: some View {
+        HStack(spacing: 4) {
+            if player.isDealer {
+                PositionBadge(text: "D", color: .yellow)
+            }
+            if player.isSmallBlind {
+                PositionBadge(text: "SB", color: .blue)
+            }
+            if player.isBigBlind {
+                PositionBadge(text: "BB", color: .orange)
+            }
+            if let pos = positionName,
+               !player.isDealer && !player.isSmallBlind && !player.isBigBlind {
+                PositionBadge(text: pos, color: Color.gray.opacity(0.7))
             }
         }
     }
@@ -67,16 +108,10 @@ struct PlayerView: View {
             )
 
             VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 4) {
-                    Text(player.name)
-                        .font(.system(size: isBottom ? 14 : 12, weight: .semibold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-
-                    if player.isDealer {
-                        dealerBadge
-                    }
-                }
+                Text(player.name)
+                    .font(.system(size: isBottom ? 14 : 12, weight: .semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
 
                 Text("$\(player.chips)")
                     .font(.system(size: isBottom ? 13 : 11, weight: .bold, design: .rounded))
@@ -121,14 +156,6 @@ struct PlayerView: View {
             spacing: 4,
             cardWidth: isBottom ? 52 : 38
         )
-    }
-
-    private var dealerBadge: some View {
-        Text("D")
-            .font(.system(size: 9, weight: .black))
-            .foregroundColor(.black)
-            .frame(width: 16, height: 16)
-            .background(Circle().fill(.yellow))
     }
 
     @ViewBuilder
