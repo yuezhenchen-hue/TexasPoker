@@ -22,11 +22,30 @@ enum AIStyle: CaseIterable {
     case tight, loose, aggressive
 }
 
+struct AvatarInfo {
+    let emoji: String
+    let bgColors: (Color, Color)
+
+    static let human = AvatarInfo(emoji: "😎", bgColors: (.blue, .cyan))
+    static let presets: [AvatarInfo] = [
+        AvatarInfo(emoji: "👩‍💼", bgColors: (.purple, .pink)),
+        AvatarInfo(emoji: "🧔", bgColors: (.orange, .red)),
+        AvatarInfo(emoji: "🤠", bgColors: (.green, .teal)),
+        AvatarInfo(emoji: "👸", bgColors: (.pink, .purple)),
+        AvatarInfo(emoji: "🦊", bgColors: (.orange, .yellow)),
+        AvatarInfo(emoji: "🐺", bgColors: (.gray, .blue)),
+        AvatarInfo(emoji: "🎩", bgColors: (.indigo, .purple)),
+    ]
+}
+
+import SwiftUI
+
 class Player: Identifiable, ObservableObject {
     let id = UUID()
     let name: String
     let isHuman: Bool
     let aiStyle: AIStyle?
+    let avatar: AvatarInfo
 
     @Published var chips: Int
     @Published var holeCards: [Card] = []
@@ -39,11 +58,12 @@ class Player: Identifiable, ObservableObject {
     @Published var isBigBlind: Bool = false
     @Published var lastAction: PlayerAction?
 
-    init(name: String, chips: Int = 1000, isHuman: Bool = false, aiStyle: AIStyle? = nil) {
+    init(name: String, chips: Int = 1000, isHuman: Bool = false, aiStyle: AIStyle? = nil, avatar: AvatarInfo = .human) {
         self.name = name
         self.chips = chips
         self.isHuman = isHuman
         self.aiStyle = aiStyle
+        self.avatar = avatar
     }
 
     var isActive: Bool {

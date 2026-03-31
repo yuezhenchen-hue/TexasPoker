@@ -17,26 +17,12 @@ struct GameView: View {
 
                 VStack(spacing: 0) {
                     topBar(geo: geo)
-
-                    Spacer(minLength: 4)
-
-                    topPlayers(geo: geo)
-
-                    Spacer(minLength: 4)
-
-                    pokerTable(geo: geo)
-
-                    Spacer(minLength: 4)
-
-                    bottomPlayer(geo: geo)
-
-                    Spacer(minLength: 4)
-
+                    Spacer(minLength: 0)
+                    tableArea(geo: geo)
+                    Spacer(minLength: 0)
                     bottomArea(geo: geo)
                 }
-                .padding(.horizontal, 8)
 
-                // Dealing animation overlay
                 if viewModel.isDealing {
                     dealingOverlay(geo: geo)
                 }
@@ -55,9 +41,9 @@ struct GameView: View {
     private var background: some View {
         LinearGradient(
             colors: [
-                Color(red: 0.05, green: 0.05, blue: 0.12),
-                Color(red: 0.08, green: 0.12, blue: 0.08),
-                Color(red: 0.05, green: 0.05, blue: 0.12),
+                Color(red: 0.04, green: 0.04, blue: 0.10),
+                Color(red: 0.06, green: 0.10, blue: 0.06),
+                Color(red: 0.04, green: 0.04, blue: 0.10),
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -84,14 +70,13 @@ struct GameView: View {
 
             Spacer()
 
-            Text("阶段: \(viewModel.engine.phase.rawValue)")
-                .font(.system(size: 12))
-                .foregroundColor(.gray)
+            Text(viewModel.engine.phase.rawValue)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.white.opacity(0.5))
 
             Spacer()
 
             HStack(spacing: 12) {
-                // Music toggle
                 Button(action: {
                     soundManager.isMusicEnabled.toggle()
                     soundManager.playButtonTap()
@@ -106,134 +91,177 @@ struct GameView: View {
                     .foregroundColor(.gray)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.top, geo.safeAreaInsets.top + 4)
+        .padding(.horizontal, 14)
+        .padding(.top, geo.safeAreaInsets.top + 2)
     }
 
-    // MARK: - Dealing Overlay
+    // MARK: - Table Area (big table + players around it)
 
-    private func dealingOverlay(geo: GeometryProxy) -> some View {
-        let deckPos = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2 - 60)
-
-        return ZStack {
-            // Deck position indicator
-            VStack(spacing: 4) {
-                Image(systemName: "rectangle.stack.fill")
-                    .font(.system(size: 28))
-                    .foregroundColor(.yellow.opacity(0.8))
-                Text("荷官发牌中...")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-            .position(deckPos)
-
-            // Flying cards animation
-            ForEach(Array(viewModel.dealtPlayerIndices), id: \.self) { idx in
-                CardView(card: nil, faceUp: false, width: 36, height: 51)
-                    .transition(.asymmetric(
-                        insertion: .scale.combined(with: .opacity),
-                        removal: .opacity
-                    ))
-            }
-        }
-        .animation(.easeInOut(duration: 0.2), value: viewModel.dealtPlayerIndices)
-    }
-
-    // MARK: - Poker Table
-
-    private func pokerTable(geo: GeometryProxy) -> some View {
-        let tableW = geo.size.width - 40
-        let tableH = min(geo.size.height * 0.32, 200.0)
+    private func tableArea(geo: GeometryProxy) -> some View {
+        let tableW = geo.size.width - 24
+        let tableH = geo.size.height * 0.55
+        let centerX = geo.size.width / 2
+        let centerY = geo.safeAreaInsets.top + 40 + tableH / 2
 
         return ZStack {
-            Ellipse()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color(red: 0.15, green: 0.45, blue: 0.25),
-                            Color(red: 0.1, green: 0.35, blue: 0.18)
-                        ],
-                        center: .center,
-                        startRadius: 10,
-                        endRadius: tableW * 0.5
-                    )
-                )
-                .frame(width: tableW, height: tableH)
+            // The felt table
+            pokerTable(tableW: tableW, tableH: tableH)
 
-            Ellipse()
-                .stroke(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.5, green: 0.3, blue: 0.1),
-                            Color(red: 0.35, green: 0.2, blue: 0.08),
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 8
-                )
-                .frame(width: tableW, height: tableH)
-
-            if viewModel.engine.pot > 0 {
-                VStack(spacing: 2) {
-                    Text("底池")
-                        .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.7))
-                    Text("\(viewModel.engine.pot)")
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundColor(.yellow)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
-                .background(Capsule().fill(Color.black.opacity(0.5)))
-                .offset(y: -tableH * 0.28)
-            }
-
+            // Community cards in center
             if !viewModel.engine.communityCards.isEmpty {
                 CardRow(
                     cards: viewModel.engine.communityCards,
                     faceUp: true,
-                    spacing: 5,
-                    cardWidth: min(48, (tableW - 80) / 6)
+                    spacing: 6,
+                    cardWidth: min(50, (tableW - 100) / 6)
                 )
                 .transition(.scale.combined(with: .opacity))
                 .animation(.easeOut(duration: 0.3), value: viewModel.engine.communityCards.count)
             }
 
-            sidePlayers(tableW: tableW, tableH: tableH)
+            // Pot above cards
+            if viewModel.engine.pot > 0 {
+                VStack(spacing: 1) {
+                    Text("底池")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.7))
+                    Text("\(viewModel.engine.pot)")
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .foregroundColor(.yellow)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(Color.black.opacity(0.55)))
+                .offset(y: -tableH * 0.22)
+            }
 
+            // Message
             messageView
-                .offset(y: tableH * 0.38)
+                .offset(y: tableH * 0.22)
+
+            // Players arranged around the ellipse
+            playersAroundTable(tableW: tableW, tableH: tableH)
+        }
+        .frame(width: geo.size.width, height: tableH + 60)
+    }
+
+    private func pokerTable(tableW: CGFloat, tableH: CGFloat) -> some View {
+        ZStack {
+            // Outer shadow glow
+            Ellipse()
+                .fill(Color.black.opacity(0.4))
+                .frame(width: tableW + 4, height: tableH + 4)
+                .blur(radius: 12)
+
+            // Wood rim
+            Ellipse()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.45, green: 0.28, blue: 0.12),
+                            Color(red: 0.32, green: 0.18, blue: 0.06),
+                            Color(red: 0.45, green: 0.28, blue: 0.12),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(width: tableW, height: tableH)
+
+            // Inner felt
+            Ellipse()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color(red: 0.16, green: 0.48, blue: 0.28),
+                            Color(red: 0.10, green: 0.36, blue: 0.18),
+                            Color(red: 0.07, green: 0.28, blue: 0.13),
+                        ],
+                        center: .center,
+                        startRadius: 20,
+                        endRadius: tableW * 0.45
+                    )
+                )
+                .frame(width: tableW - 20, height: tableH - 20)
+
+            // Subtle highlight
+            Ellipse()
+                .fill(
+                    RadialGradient(
+                        colors: [Color.white.opacity(0.06), Color.clear],
+                        center: UnitPoint(x: 0.4, y: 0.35),
+                        startRadius: 10,
+                        endRadius: tableW * 0.35
+                    )
+                )
+                .frame(width: tableW - 20, height: tableH - 20)
+
+            // Inner border line
+            Ellipse()
+                .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                .frame(width: tableW - 50, height: tableH - 50)
         }
     }
 
-    // MARK: - Players Layout
+    // MARK: - Players around the table
 
-    private func topPlayers(geo: GeometryProxy) -> some View {
-        let topAI = topPositionPlayers
-        return HStack(spacing: 16) {
-            ForEach(topAI, id: \.id) { player in
-                playerViewAnimated(player: player, isBottom: false)
-            }
-        }
-    }
+    private func playersAroundTable(tableW: CGFloat, tableH: CGFloat) -> some View {
+        let allPlayers = viewModel.engine.players
+        let count = allPlayers.count
 
-    private func sidePlayers(tableW: CGFloat, tableH: CGFloat) -> some View {
-        let sides = sidePositionPlayers
+        // Human is always at bottom center, AI distributed around top half
+        let positions = calculatePlayerPositions(count: count, tableW: tableW, tableH: tableH)
+
         return ZStack {
-            if sides.count > 0 {
-                playerViewAnimated(player: sides[0], isBottom: false)
-                    .offset(x: -tableW * 0.42, y: 0)
-            }
-            if sides.count > 1 {
-                playerViewAnimated(player: sides[1], isBottom: false)
-                    .offset(x: tableW * 0.42, y: 0)
+            ForEach(Array(allPlayers.enumerated()), id: \.element.id) { index, player in
+                if index < positions.count {
+                    playerViewAnimated(player: player, isBottom: player.isHuman)
+                        .offset(x: positions[index].x, y: positions[index].y)
+                }
             }
         }
     }
 
-    private func bottomPlayer(geo: GeometryProxy) -> some View {
-        playerViewAnimated(player: viewModel.engine.human, isBottom: true)
+    private func calculatePlayerPositions(count: Int, tableW: CGFloat, tableH: CGFloat) -> [CGPoint] {
+        // Index 0 = human (bottom), rest = AI spread around top
+        guard count > 0 else { return [] }
+
+        var positions: [CGPoint] = []
+
+        // Human at bottom center
+        positions.append(CGPoint(x: 0, y: tableH * 0.42))
+
+        let aiCount = count - 1
+        guard aiCount > 0 else { return positions }
+
+        // AI players distributed on the upper arc of the ellipse
+        // Angles from ~210° to ~330° (in standard math coords, that's upper half)
+        let rx = tableW * 0.48
+        let ry = tableH * 0.46
+
+        if aiCount == 1 {
+            // Directly across from human
+            positions.append(CGPoint(x: 0, y: -ry))
+        } else if aiCount == 2 {
+            let angles: [CGFloat] = [-0.7, 0.7]  // roughly ±40°
+            for a in angles {
+                positions.append(CGPoint(x: sin(a) * rx, y: -cos(a) * ry))
+            }
+        } else {
+            // Spread evenly across the upper arc
+            let startAngle: CGFloat = -.pi * 0.75
+            let endAngle: CGFloat = .pi * 0.75
+            let step = (endAngle - startAngle) / CGFloat(aiCount + 1)
+
+            for i in 1...aiCount {
+                let angle = startAngle + step * CGFloat(i)
+                let x = sin(angle) * rx
+                let y = -cos(angle) * ry
+                positions.append(CGPoint(x: x, y: y))
+            }
+        }
+
+        return positions
     }
 
     private func playerViewAnimated(player: Player, isBottom: Bool) -> some View {
@@ -254,19 +282,23 @@ struct GameView: View {
         .animation(.easeInOut(duration: 0.3), value: player.isFolded)
     }
 
-    private var topPositionPlayers: [Player] {
-        let ai = viewModel.engine.aiPlayers
-        if ai.count <= 2 { return ai }
-        let mid = ai.count / 2
-        return Array(ai[mid...])
-    }
+    // MARK: - Dealing Overlay
 
-    private var sidePositionPlayers: [Player] {
-        let ai = viewModel.engine.aiPlayers
-        guard ai.count >= 1 else { return [] }
-        if ai.count <= 2 { return [] }
-        let mid = ai.count / 2
-        return Array(ai.prefix(mid))
+    private func dealingOverlay(geo: GeometryProxy) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: "rectangle.stack.fill")
+                .font(.system(size: 32))
+                .foregroundColor(.yellow.opacity(0.8))
+            Text("荷官发牌中...")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.white)
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.black.opacity(0.6))
+        )
+        .animation(.easeInOut(duration: 0.2), value: viewModel.dealtPlayerIndices)
     }
 
     // MARK: - Bottom Area
@@ -276,20 +308,24 @@ struct GameView: View {
             if viewModel.engine.phase == .waiting {
                 startButton
             } else if viewModel.isDealing {
-                Text("荷官发牌中...")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.yellow)
+                EmptyView()
             } else if viewModel.engine.phase == .handOver {
                 nextHandButton
             } else if viewModel.engine.waitingForHuman {
                 ActionBar(viewModel: viewModel)
             } else {
-                Text("AI 思考中...")
-                    .font(.system(size: 14))
-                    .foregroundColor(.white.opacity(0.5))
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .tint(.white.opacity(0.5))
+                        .scaleEffect(0.8)
+                    Text("AI 思考中...")
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.5))
+                }
             }
         }
-        .padding(.bottom, geo.safeAreaInsets.bottom + 8)
+        .padding(.bottom, geo.safeAreaInsets.bottom + 6)
+        .padding(.horizontal, 12)
     }
 
     private var startButton: some View {
@@ -338,7 +374,7 @@ struct GameView: View {
         Text(viewModel.engine.message)
             .font(.system(size: 13, weight: .semibold))
             .foregroundColor(.white)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 14)
             .padding(.vertical, 5)
             .background(Capsule().fill(Color.black.opacity(0.6)))
             .animation(.easeInOut(duration: 0.2), value: viewModel.engine.message)
@@ -348,72 +384,89 @@ struct GameView: View {
 
     private var resultsOverlay: some View {
         ZStack {
-            Color.black.opacity(0.5)
+            Color.black.opacity(0.55)
                 .ignoresSafeArea()
                 .onTapGesture { }
 
-            VStack(spacing: 14) {
-                Text("本局结果")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(.yellow)
+            ScrollView {
+                VStack(spacing: 14) {
+                    Text("本局结果")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(.yellow)
 
-                ForEach(viewModel.engine.handResults) { result in
-                    HStack {
-                        Text(result.player.name)
-                            .foregroundColor(.white)
-                            .font(.system(size: 16, weight: .semibold))
+                    ForEach(viewModel.engine.handResults) { result in
+                        HStack(spacing: 10) {
+                            AvatarView(
+                                avatar: result.player.avatar,
+                                size: 32,
+                                isCurrent: false,
+                                isFolded: false
+                            )
 
-                        Spacer()
+                            Text(result.player.name)
+                                .foregroundColor(.white)
+                                .font(.system(size: 16, weight: .semibold))
 
-                        Text("+\(result.winnings)")
-                            .foregroundColor(.green)
-                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            Spacer()
 
-                        Text(result.handDescription)
-                            .foregroundColor(.gray)
-                            .font(.system(size: 14))
+                            Text("+\(result.winnings)")
+                                .foregroundColor(.green)
+                                .font(.system(size: 16, weight: .bold, design: .rounded))
+
+                            Text(result.handDescription)
+                                .foregroundColor(.gray)
+                                .font(.system(size: 14))
+                        }
+                        .padding(.horizontal, 16)
                     }
-                    .padding(.horizontal, 20)
-                }
 
-                if viewModel.engine.activePlayers.count > 1 {
-                    Divider().background(Color.white.opacity(0.3))
+                    if viewModel.engine.activePlayers.count > 1 {
+                        Divider().background(Color.white.opacity(0.3))
 
-                    ForEach(viewModel.engine.activePlayers, id: \.id) { player in
-                        HStack(spacing: 8) {
-                            Text(player.name)
-                                .font(.system(size: 13))
-                                .foregroundColor(.white.opacity(0.8))
-                                .frame(width: 60, alignment: .leading)
+                        ForEach(viewModel.engine.activePlayers, id: \.id) { player in
+                            HStack(spacing: 8) {
+                                AvatarView(
+                                    avatar: player.avatar,
+                                    size: 24,
+                                    isCurrent: false,
+                                    isFolded: false
+                                )
 
-                            CardRow(cards: player.holeCards, faceUp: true, spacing: 4, cardWidth: 36)
+                                Text(player.name)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.white.opacity(0.8))
+                                    .frame(width: 55, alignment: .leading)
+
+                                CardRow(cards: player.holeCards, faceUp: true, spacing: 4, cardWidth: 36)
+                            }
                         }
                     }
-                }
 
-                Button(action: {
-                    soundManager.playButtonTap()
-                    viewModel.nextHand()
-                }) {
-                    Text("下一局")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 30)
-                        .padding(.vertical, 10)
-                        .background(RoundedRectangle(cornerRadius: 10).fill(.blue))
+                    Button(action: {
+                        soundManager.playButtonTap()
+                        viewModel.nextHand()
+                    }) {
+                        Text("下一局")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 30)
+                            .padding(.vertical, 10)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(.blue))
+                    }
+                    .padding(.top, 4)
                 }
-                .padding(.top, 4)
+                .padding(24)
             }
-            .padding(24)
+            .frame(maxHeight: 420)
             .background(
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(Color(red: 0.1, green: 0.1, blue: 0.18))
+                    .fill(Color(red: 0.08, green: 0.08, blue: 0.16))
                     .overlay(
                         RoundedRectangle(cornerRadius: 20)
                             .stroke(Color.yellow.opacity(0.3), lineWidth: 1)
                     )
             )
-            .padding(.horizontal, 40)
+            .padding(.horizontal, 30)
             .transition(.scale.combined(with: .opacity))
         }
     }

@@ -54,10 +54,11 @@ class GameEngine: ObservableObject {
     ]
 
     init(aiCount: Int = 4, startingChips: Int = 1000) {
-        human = Player(name: "你", chips: startingChips, isHuman: true)
+        human = Player(name: "你", chips: startingChips, isHuman: true, avatar: .human)
         let count = min(aiCount, allAITemplates.count)
-        aiPlayers = allAITemplates.prefix(count).map {
-            Player(name: $0.0, chips: startingChips, aiStyle: $0.1)
+        aiPlayers = allAITemplates.prefix(count).enumerated().map { i, t in
+            let avatar = AvatarInfo.presets[i % AvatarInfo.presets.count]
+            return Player(name: t.0, chips: startingChips, aiStyle: t.1, avatar: avatar)
         }
         players = [human] + aiPlayers
     }
@@ -65,8 +66,9 @@ class GameEngine: ObservableObject {
     func reconfigure(aiCount: Int, startingChips: Int) {
         let count = min(aiCount, allAITemplates.count)
         human.chips = startingChips
-        aiPlayers = allAITemplates.prefix(count).map {
-            Player(name: $0.0, chips: startingChips, aiStyle: $0.1)
+        aiPlayers = allAITemplates.prefix(count).enumerated().map { i, t in
+            let avatar = AvatarInfo.presets[i % AvatarInfo.presets.count]
+            return Player(name: t.0, chips: startingChips, aiStyle: t.1, avatar: avatar)
         }
         players = [human] + aiPlayers
         phase = .waiting
